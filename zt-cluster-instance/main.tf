@@ -30,7 +30,7 @@ resource "null_resource" "apply_zt_cluster_service" {
 
   provisioner "local-exec" {
     command = <<EOT
-    microk8s kubectl apply -f https://raw.githubusercontent.com/gem-cp/zt-cluster-poc/main/zt-cluster/zt-cluster-service.yaml
+    microk8s kubectl apply -f https://raw.githubusercontent.com/gem-cp/zt-cluster-poc/main/zt-cluster/simple-web-service.yaml
     EOT
   }
 }
@@ -63,10 +63,10 @@ resource "kubernetes_deployment" "argocd" {
       }
 
       spec {
-        containers {
+        container {
           name  = "argocd-server"
           image = "argoproj/argocd:v2.3.3"
-          ports {
+          port {
             container_port = 8080
           }
 

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-web-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-web-service
+  template:
+    metadata:
+      labels:
+        app: simple-web-service
+    spec:
+      containers:
+      - name: simple-web-service
+        image: python:3.9-slim
+        command: ["python", "-m", "flask", "run", "--host=0.0.0.0"]
+        env:
+        - name: FLASK_APP
+          value: "app.py"
+        - name: FLASK_RUN_PORT
+          value: "8080"
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: app-volume
+          mountPath: /app
+      volumes:
+      - name: app-volume
+        configMap:
+          name: simple-web-service-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-web-service-config
+data:
+  app.py: |
+    from flask import Flask
+    app = Flask(__name__)
+
+    @app.route('/')
+    def hello_world():
+        return 'Webservice is running'
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-web-service
+spec:
+  selector:
+    app: simple-web-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
