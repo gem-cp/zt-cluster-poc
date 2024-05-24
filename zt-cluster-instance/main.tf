@@ -63,10 +63,10 @@ resource "kubernetes_deployment" "argocd" {
       }
 
       spec {
-        container {
+        containers {
           name  = "argocd-server"
           image = "argoproj/argocd:v2.3.3"
-          port {
+          ports {
             container_port = 8080
           }
 
