@@ -1,1 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: jboss/keycloak:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KEYCLOAK_USER
+          value: admin
+        - name: KEYCLOAK_PASSWORD
+          value: admin
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: keycloak
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opa
+  template:
+    metadata:
+      labels:
+        app: opa
+    spec:
+      containers:
+      - name: opa
+        image: openpolicyagent/opa:latest
+        ports:
+        - containerPort: 8181
+        args:
+        - "run"
+        - "--server"
+        - "--log-level=debug"
+        - "--config-file=/config/config.yaml"
+        volumeMounts:
+        - mountPath: /config
+          name: opa-config
+      volumes:
+      - name: opa-config
+        configMap:
+          name: opa-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-config
+data:
+  config.yaml: |
+    services:
+      authz:
+        url: http://keycloak:8080
+    labels:
+      app: my-opa
+    discovery:
+      enabled: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+spec:
+  ports:
+  - port: 8181
+    targetPort: 8181
+  selector:
+    app: opa
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: auth.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080
+      - path: /opa
+        pathType: Prefix
+        backend:
+          service:
+            name: opa
+            port:
+              number: 8181
 
