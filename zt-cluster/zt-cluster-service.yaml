@@ -1,52 +1,14 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: hydra
-  labels:
-    app: hydra
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: hydra
-  template:
-    metadata:
-      labels:
-        app: hydra
-    spec:
-      containers:
-      - name: hydra
-        image: oryd/hydra:v1.10.6
-        ports:
-        - containerPort: 4444
-        - containerPort: 4445
-        env:
-        - name: DATABASE_URL
-          value: "memory"
-        - name: SYSTEM_SECRET
-          value: "youReallyNeedToChangeThis"
-        - name: OIDC_SUBJECT_IDENTIFIERS_SUPPORTED
-          value: "public"
-        - name: URLS_SELF_ISSUER
-          value: "http://localhost:4444/"
-        - name: CONSENT_URL
-          value: "http://localhost:3000/consent"
-        - name: LOG_LEVEL
-          value: "debug"
-
----
 apiVersion: v1
 kind: Service
 metadata:
-  name: hydra
+  name: opa
 spec:
   ports:
-  - port: 4444
-    targetPort: 4444
-  - port: 4445
-    targetPort: 4445
+  - port: 8181
+    targetPort: 8181
+    name: http
   selector:
-    app: hydra
+    app: opa
 
 ---
 apiVersion: apps/v1
@@ -68,18 +30,7 @@ spec:
         image: openpolicyagent/opa:latest
         ports:
         - containerPort: 8181
-        args:
-        - "run"
-        - "--server"
-        - "--log-level=debug"
-        - "--config-file=/config/config.yaml"
-        volumeMounts:
-        - mountPath: /config
-          name: opa-config
-      volumes:
-      - name: opa-config
-        configMap:
-          name: opa-config
+          name: http
 
 ---
 apiVersion: v1
@@ -87,50 +38,69 @@ kind: ConfigMap
 metadata:
   name: opa-config
 data:
-  config.yaml: |
-    services:
-      authz:
-        url: http://hydra:4444
-    labels:
-      app: my-opa
-    discovery:
-      enabled: true
+  policy.rego: |
+    package example
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: opa
-spec:
-  ports:
-  - port: 8181
-    targetPort: 8181
-  selector:
-    app: opa
+    default allow = false
+
+    allow {
+      input.method = "GET"
+    }
 
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: auth-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - host: auth.example.com
     http:
       paths:
-      - path: /hydra
-        pathType: Prefix
-        backend:
-          service:
-            name: hydra
-            port:
-              number: 4444
-      - path: /opa
+      - path: /
         pathType: Prefix
         backend:
           service:
             name: opa
             port:
               number: 8181
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hydra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hydra
+  template:
+    metadata:
+      labels:
+        app: hydra
+    spec:
+      containers:
+      - name: hydra
+        image: oryd/hydra:latest
+        ports:
+        - containerPort: 4444
+          name: public
+        - containerPort: 4445
+          name: admin
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hydra
+spec:
+  ports:
+  - port: 4444
+    targetPort: 4444
+    name: public
+  - port: 4445
+    targetPort: 4445
+    name: admin
+  selector:
+    app: hydra
