@@ -19,14 +19,18 @@ resource "null_resource" "apply_initial_resources" {
 
   provisioner "local-exec" {
     command = <<EOT
-    microk8s kubectl apply -f https://raw.githubusercontent.com/gem-cp/zt-cluster-poc/main/zt-cluster/zt-cluster-service.yaml
+    microk8s kubectl create namespace argocd
+    microk8s kubectl apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
     EOT
   }
+}
+
+resource "null_resource" "apply_zt_cluster_service" {
+  depends_on = [null_resource.apply_initial_resources]
 
   provisioner "local-exec" {
     command = <<EOT
-    microk8s kubectl create namespace argocd
-    microk8s kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    microk8s kubectl apply -f https://raw.githubusercontent.com/gem-cp/zt-cluster-poc/main/zt-cluster/zt-cluster-service.yaml
     EOT
   }
 }
@@ -97,6 +101,8 @@ resource "kubernetes_service" "argocd" {
 }
 
 resource "kubernetes_secret" "argocd_admin_password" {
+  depends_on = [kubernetes_service.argocd]
+
   metadata {
     name      = "argocd-secret"
     namespace = "argocd"
@@ -109,7 +115,7 @@ resource "kubernetes_secret" "argocd_admin_password" {
 }
 
 resource "null_resource" "argocd_application" {
-  depends_on = [kubernetes_service.argocd]
+  depends_on = [kubernetes_secret.argocd_admin_password]
 
   provisioner "local-exec" {
     command = <<EOT
@@ -136,4 +142,3 @@ resource "null_resource" "argocd_application" {
     EOT
   }
 }
-
